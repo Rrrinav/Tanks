@@ -1,23 +1,23 @@
-let lastTime = 0;
-let elapsedTime = 0;
-const FPS = 60;
+let lastTime         = 0;
+let elapsedTime      = 0;
+const FPS            = 60;
 const FRAME_DURATION = 1000 / FPS;
-const GRID_SIZE = 20; // Fixed square grid size
-const GRID_WIDTH = 20; // Number of columns
-const GRID_HEIGHT = 20; // Number of rows
+const GRID_SIZE      = 20;
+const GRID_WIDTH     = 20;
+const GRID_HEIGHT    = 20;
 
 const CANVAS = document.getElementById('canvas') as HTMLCanvasElement;
-const ctx = CANVAS.getContext('2d') as CanvasRenderingContext2D;
+const ctx    = CANVAS.getContext('2d') as CanvasRenderingContext2D;
 
 function resizeCanvas(): void {
-  CANVAS.width = window.innerWidth;
+  CANVAS.width  = window.innerWidth;
   CANVAS.height = window.innerHeight;
 }
 
 function drawGrid(xOffset = 0, yOffset = 0, width = GRID_WIDTH, height = GRID_HEIGHT): void {
-  ctx.lineWidth = 1;
+  ctx.lineWidth   = 1;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  const cellSize = Math.min(CANVAS.width / (2 * GRID_WIDTH), CANVAS.height / GRID_HEIGHT);
+  const cellSize  = Math.min(CANVAS.width / (2 * GRID_WIDTH), CANVAS.height / GRID_HEIGHT);
 
   for (let x = 0; x < width; x++) {
     for (let y = 0; y < height; y++) {
@@ -31,7 +31,8 @@ function drawGrid(xOffset = 0, yOffset = 0, width = GRID_WIDTH, height = GRID_HE
 function drawMap(): void {
   // Top bar
   const mapHeight = CANVAS.width * 0.05;
-  const gradient = ctx.createLinearGradient(0, 0, CANVAS.width, mapHeight);
+  const gradient  = ctx.createLinearGradient(0, 0, CANVAS.width, mapHeight);
+
   gradient.addColorStop(0, "#444");
   gradient.addColorStop(1, "#222");
 
@@ -47,12 +48,12 @@ function drawMap(): void {
   ctx.fillStyle = "white";
   ctx.fillText("Fog of Tank", CANVAS.width / 2, mapHeight / 2 + 10);
 
-  const cellSize = Math.min(CANVAS.width / (2 * GRID_WIDTH), CANVAS.height / GRID_HEIGHT);
+  const cellSize   = Math.min(CANVAS.width / (2 * GRID_WIDTH), CANVAS.height / GRID_HEIGHT);
   const gridHeight = GRID_HEIGHT * cellSize;
-  const gridWidth = GRID_WIDTH * cellSize;
+  const gridWidth  = GRID_WIDTH * cellSize;
 
-  const xOffset = (CANVAS.width - 2 * gridWidth) / 2;
-  const yOffset = (CANVAS.height - gridHeight) / 2 + mapHeight;
+  const xOffset    = (CANVAS.width - 2 * gridWidth) / 2;
+  const yOffset    = (CANVAS.height - gridHeight) / 2 + mapHeight;
 
   // Left player grid
   drawGrid(xOffset, yOffset);
@@ -95,4 +96,3 @@ window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 CANVAS.style.backgroundColor = "black";
 requestAnimationFrame(mainLoop);
-
