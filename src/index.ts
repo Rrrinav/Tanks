@@ -2,7 +2,9 @@ let lastTime = 0;
 let elapsedTime = 0;
 const FPS = 60;
 const FRAME_DURATION = 1000 / FPS;
-const GRID_SIZE = 50;
+const GRID_SIZE = 20; // Fixed square grid size
+const GRID_WIDTH = 20; // Number of columns
+const GRID_HEIGHT = 20; // Number of rows
 
 const CANVAS = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = CANVAS.getContext('2d') as CanvasRenderingContext2D;
@@ -12,11 +14,16 @@ function resizeCanvas(): void {
   CANVAS.height = window.innerHeight;
 }
 
-function drawGrid(xOffset = 0, yOffset = 0, width = CANVAS.width, height = CANVAS.height): void {
-  for (let x = xOffset; x < xOffset + width; x += GRID_SIZE) {
-    for (let y = yOffset; y < yOffset + height; y += GRID_SIZE) {
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-      ctx.strokeRect(x, y, GRID_SIZE, GRID_SIZE);
+function drawGrid(xOffset = 0, yOffset = 0, width = GRID_WIDTH, height = GRID_HEIGHT): void {
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  const cellSize = Math.min(CANVAS.width / (2 * GRID_WIDTH), CANVAS.height / GRID_HEIGHT);
+
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      const xPos = xOffset + x * cellSize;
+      const yPos = yOffset + y * cellSize;
+      ctx.strokeRect(xPos, yPos, cellSize, cellSize);
     }
   }
 }
@@ -40,18 +47,28 @@ function drawMap(): void {
   ctx.fillStyle = "white";
   ctx.fillText("Fog of Tank", CANVAS.width / 2, mapHeight / 2 + 10);
 
-  // Middle part
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
-  const middle = CANVAS.width * 0.5;
-  ctx.moveTo(middle, mapHeight);
-  ctx.lineTo(middle, CANVAS.height);
-  ctx.stroke();
+  const cellSize = Math.min(CANVAS.width / (2 * GRID_WIDTH), CANVAS.height / GRID_HEIGHT);
+  const gridHeight = GRID_HEIGHT * cellSize;
+  const gridWidth = GRID_WIDTH * cellSize;
 
-  // Grids for both parts
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  ctx.lineWidth = 1;
-  drawGrid(0, mapHeight, middle - GRID_SIZE, CANVAS.height);
-  drawGrid(middle, mapHeight, CANVAS.width - GRID_SIZE, CANVAS.height);
+  const xOffset = (CANVAS.width - 2 * gridWidth) / 2;
+  const yOffset = (CANVAS.height - gridHeight) / 2 + mapHeight;
+
+  // Left player grid
+  drawGrid(xOffset, yOffset);
+  // Right player grid with empty space on the right
+  drawGrid(CANVAS.width / 2, yOffset);
+
+  console.log("xOffset", xOffset);
+  console.log("something", CANVAS.width / 2 - gridWidth + xOffset);
+
+  // Divider line
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(CANVAS.width / 2, mapHeight);
+  ctx.lineTo(CANVAS.width / 2, CANVAS.height);
+  ctx.stroke();
 }
 
 function render(): void {
@@ -59,10 +76,7 @@ function render(): void {
   drawMap();
 }
 
-function update(dt: number): void {
-
-}
-
+function update(dt: number): void {}
 
 function mainLoop(timestamp: number): void {
   requestAnimationFrame(mainLoop);
@@ -81,3 +95,4 @@ window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 CANVAS.style.backgroundColor = "black";
 requestAnimationFrame(mainLoop);
+
