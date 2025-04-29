@@ -1,15 +1,19 @@
 const FPS = 60;
 const FRAME_DURATION = 1000 / FPS;
-const GRID_WIDTH = 15;
+const GRID_WIDTH = 18;
 const GRID_HEIGHT = 15;
-const DEBUG = false;
+const DEBUG = true;
+
+// Fixed design resolution
+const DESIGN_WIDTH = 1920;
+const DESIGN_HEIGHT = 1080;
 
 const CANVAS = document.getElementById("canvas") as HTMLCanvasElement;
 const ctx2D = CANVAS.getContext("2d") as CanvasRenderingContext2D;
-const ctxGL = CANVAS.getContext("webgl2") as WebGL2RenderingContext;
 
 let lastTime = 0;
 let elapsedTime = 0;
+let scale = 1; // Scale factor for rendering
 
 // Asset Manager for centralized resource loading
 class AssetManager {
@@ -67,7 +71,7 @@ enum Direction {
 
 class Grid {
   public readonly width: number;
-  public readonly height: number;
+  public height: number;
   public readonly player: number;
   public cellSize: number = 0;
   public xOffset: number = 0;
@@ -83,16 +87,15 @@ class Grid {
   }
 
   computeDimensions(): void {
-    const mapHeight = CANVAS.width * 0.05; // Top bar height
-    this.cellSize = Math.min(CANVAS.width / (2 * this.width), CANVAS.height / this.height);
+    const mapHeight = DESIGN_WIDTH * 0.05; // Top bar height
+    this.cellSize = Math.min(DESIGN_WIDTH / (2 * this.width), DESIGN_HEIGHT / this.height);
 
-    const gridHeight = this.height * this.cellSize;
     const gridWidth = this.width * this.cellSize;
 
     this.xOffset = this.player === 1
-      ? (CANVAS.width - 2 * gridWidth) / 2
-      : CANVAS.width / 2;
-    this.yOffset = (CANVAS.height - gridHeight) / 2 + mapHeight;
+      ? (DESIGN_WIDTH - 2 * gridWidth) / 2
+      : DESIGN_WIDTH / 2;
+    this.yOffset = mapHeight;
   }
 
   getCellPosition(gridX: number, gridY: number): { x: number; y: number } {
@@ -216,28 +219,53 @@ let p1Tank = new Tank(p1Grid, 0, 0, Direction.DOWN);
 let p2Tank = new Tank(p2Grid, 0, 0, Direction.DOWN);
 
 const resizeCanvas = (): void => {
+  // Set the canvas size to match the window
   CANVAS.width = window.innerWidth;
   CANVAS.height = window.innerHeight;
 
-  p1Grid.computeDimensions();
-  p2Grid.computeDimensions();
+  // Calculate scale factor to fit the design resolution
+  const widthRatio = window.innerWidth / DESIGN_WIDTH;
+  const heightRatio = window.innerHeight / DESIGN_HEIGHT;
+
+  // Use the smaller ratio to ensure entire game is visible
+  scale = Math.min(widthRatio, heightRatio);
+
+  // Set canvas CSS to scale while maintaining aspect ratio
+  const scaledWidth = Math.floor(DESIGN_WIDTH * scale);
+  const scaledHeight = Math.floor(DESIGN_HEIGHT * scale);
+
+  // Center the canvas
+  const leftMargin = Math.max(0, Math.floor((window.innerWidth - scaledWidth) / 2));
+  const topMargin = Math.max(0, Math.floor((window.innerHeight - scaledHeight) / 2));
+
+  CANVAS.style.width = `${scaledWidth}px`;
+  CANVAS.style.height = `${scaledHeight}px`;
+  CANVAS.style.position = 'absolute';
+  CANVAS.style.left = `${leftMargin}px`;
+  CANVAS.style.top = `${topMargin}px`;
+
+  // Set actual canvas dimensions to design resolution for consistent rendering
+  CANVAS.width = DESIGN_WIDTH;
+  CANVAS.height = DESIGN_HEIGHT;
+
+  // No need to recompute grid dimensions since they're based on fixed design values
 };
 
 const drawMap = (): void => {
-  const mapHeight = CANVAS.width * 0.05;
-  const gradient = ctx2D.createLinearGradient(0, 0, CANVAS.width, mapHeight);
+  const mapHeight = DESIGN_WIDTH * 0.05;
+  const gradient = ctx2D.createLinearGradient(0, 0, DESIGN_WIDTH, mapHeight);
   gradient.addColorStop(0, "#444");
   gradient.addColorStop(1, "#222");
 
   ctx2D.fillStyle = gradient;
-  ctx2D.fillRect(0, 0, CANVAS.width, mapHeight);
+  ctx2D.fillRect(0, 0, DESIGN_WIDTH, mapHeight);
   ctx2D.strokeStyle = "rgba(255, 255, 255, 0.4)";
   ctx2D.lineWidth = 3;
-  ctx2D.strokeRect(0, 0, CANVAS.width, mapHeight);
+  ctx2D.strokeRect(0, 0, DESIGN_WIDTH, mapHeight);
   ctx2D.font = "bold 30px 'Fira Code', monospace";
   ctx2D.textAlign = "center";
   ctx2D.fillStyle = "white";
-  ctx2D.fillText("Fog of Tank", CANVAS.width / 2, mapHeight / 2 + 10);
+  ctx2D.fillText("Fog of Tank", DESIGN_WIDTH / 2, mapHeight / 2 + 10);
 
   // Draw both grids
   p1Grid.draw();
@@ -247,9 +275,17 @@ const drawMap = (): void => {
   ctx2D.strokeStyle = "rgba(255, 255, 255, 0.6)";
   ctx2D.lineWidth = 3;
   ctx2D.beginPath();
-  ctx2D.moveTo(CANVAS.width / 2, mapHeight);
-  ctx2D.lineTo(CANVAS.width / 2, CANVAS.height);
+  ctx2D.moveTo(DESIGN_WIDTH / 2, mapHeight);
+  ctx2D.lineTo(DESIGN_WIDTH / 2, DESIGN_HEIGHT);
   ctx2D.stroke();
+};
+
+// Convert screen coordinates to design coordinates for input handling
+const convertToDesignCoordinates = (clientX: number, clientY: number): { x: number, y: number } => {
+  const rect = CANVAS.getBoundingClientRect();
+  const x = (clientX - rect.left) / scale;
+  const y = (clientY - rect.top) / scale;
+  return { x, y };
 };
 
 // Setup keyboard controls
@@ -285,10 +321,29 @@ const setupControls = (): void => {
         break;
     }
   });
+
+  // Add touch controls for mobile
+  CANVAS.addEventListener("touchstart", (event) => {
+    event.preventDefault(); // Prevent scrolling
+    const touch = event.touches[0];
+    const { x, y } = convertToDesignCoordinates(touch.clientX, touch.clientY);
+
+    // Determine which half of the screen was touched to identify player
+    if (x < DESIGN_WIDTH / 2) {
+      // Player 1 side - implement touch controls later if needed
+    } else {
+      // Player 2 side - implement touch controls later if needed
+    }
+  });
 };
 
 const render = (): void => {
-  ctx2D.clearRect(0, 0, CANVAS.width, CANVAS.height);
+  ctx2D.clearRect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+
+  // Fill background
+  ctx2D.fillStyle = "black";
+  ctx2D.fillRect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+
   drawMap();
 
   // Draw tanks
@@ -313,6 +368,18 @@ const mainLoop = (timestamp: number): void => {
 };
 
 const main = async (): Promise<void> => {
+  // Add an outer container div for the canvas
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '0';
+  container.style.width = '100%';
+  container.style.height = '100%';
+  container.style.overflow = 'hidden';
+  container.style.backgroundColor = 'black';
+  document.body.appendChild(container);
+  container.appendChild(CANVAS);
+
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
@@ -334,8 +401,25 @@ const main = async (): Promise<void> => {
   // Setup controls
   setupControls();
 
-  CANVAS.style.backgroundColor = "black";
   requestAnimationFrame(mainLoop);
 };
+
+// Add a CSS reset to ensure consistent behavior across browsers
+const style = document.createElement('style');
+style.textContent = `
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: black;
+  }
+`;
+document.head.appendChild(style);
 
 main();
