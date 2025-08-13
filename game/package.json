@@ -2,6 +2,7 @@
   "name": "fog-tank",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "serve": "python -m http.server",
     "watch": "npx tsc -w",

@@ -45,6 +45,7 @@ interface Player {
 interface GameState {
   id: string;
   players: Player[];
+  actionTaken: boolean;
   currentTurn: number;
   phase: GamePhase;
   winner: number | null;
@@ -136,6 +137,7 @@ class GameManager {
       id: gameId,
       players: [],
       currentTurn: 0,
+      actionTaken: false,
       phase: GamePhase.WAITING,
       winner: null,
       moveCount: 0,
@@ -282,7 +284,7 @@ class GameManager {
 
   moveTank(gameId: string, playerId: number, fromX: number, fromY: number, toX: number, toY: number): boolean {
     const game = this.games.get(gameId);
-    if (!game || game.phase !== GamePhase.BATTLE || game.currentTurn !== playerId) {
+    if (!game || game.phase !== GamePhase.BATTLE || game.currentTurn !== playerId || game.actionTaken) {
       return false;
     }
 
@@ -309,13 +311,22 @@ class GameManager {
       player.tanks[tankIndex] = { x: toX, y: toY };
     }
 
+    game.actionTaken = true;
+    this.switchTurn(game);
+
     console.log(`${player.name} moved tank from (${fromX}, ${fromY}) to (${toX}, ${toY})`);
     return true;
+  }
+  // Add this helper method to the GameManager class
+  private switchTurn(game: GameState): void {
+    game.currentTurn = 1 - game.currentTurn;
+    game.moveCount++;
+    game.actionTaken = false; // Reset for the next player's turn
   }
 
   bomb(gameId: string, playerId: number, x: number, y: number): { result: string; gameOver: boolean } {
     const game = this.games.get(gameId);
-    if (!game || game.phase !== GamePhase.BATTLE || game.currentTurn !== playerId) {
+    if (!game || game.phase !== GamePhase.BATTLE || game.currentTurn !== playerId || game.actionTaken) {
       return { result: 'Not your turn', gameOver: false };
     }
 
@@ -370,10 +381,9 @@ class GameManager {
     this.revealArea(attacker, defender, x, y);
 
     // Switch turns and increment move count
-    game.currentTurn = 1 - game.currentTurn;
-    game.moveCount++;
+    game.actionTaken = true;
+    this.switchTurn(game);
 
-    // Broadcast updated game state
     this.broadcastGameState(game);
 
     return { result, gameOver: false };
@@ -596,7 +606,7 @@ class GameManager {
         case 'moveTank':
           if (!connection) return;
           const moved = this.moveTank(connection.gameId, connection.playerId, message.fromX, message.fromY, message.toX, message.toY);
-          ws.send(JSON.stringify({ type: 'moveTankResult', success: moved }));
+          ws.send(JSON.stringify({ type: 'moveTankResult', success: moved, error: moved ? undefined : 'Move Failed' }));
           if (moved) {
             const game = this.games.get(connection.gameId);
             if (game) this.broadcastGameState(game);

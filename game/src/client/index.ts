@@ -40,6 +40,7 @@ interface SelectedCell {
 }
 
 type GamePhase = 'waiting' | 'placement' | 'battle' | 'gameover';
+type ActionState = 'attack' | 'move';
 
 enum CellState {
   EMPTY = 0,
@@ -56,9 +57,11 @@ class FogOfTankClient {
   private cellSize: number = 80;
   private tanksPerPlayer: number = 3;
   private selectedCell: SelectedCell | null = null;
+  private selectedTankCell: SelectedCell | null = null;
   private gamePhase: GamePhase = 'waiting';
   private isMyTurn: boolean = false;
   private playerId: string | null = null;
+  private actionState: ActionState = 'attack';
   gameId: string | null = null;
 
   private gameCanvas!: HTMLCanvasElement;
@@ -100,7 +103,7 @@ class FogOfTankClient {
 
   private connectWebSocket(): void {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = "ws://localhost:3000"; // Fixed the protocol
+    const wsUrl = "ws://localhost:3000";
 
     this.ws = new WebSocket(wsUrl);
 
@@ -147,6 +150,12 @@ class FogOfTankClient {
         break;
       case 'bombResult':
         this.handleBombResult(message);
+        break;
+      case 'moveTankResult':
+        this.handleMoveResult(message);
+        if (message.success) {
+          this.resetSelection()
+        }
         break;
       case 'chat':
         this.handleChat(message as ChatMessage & { type: string });
@@ -225,6 +234,18 @@ class FogOfTankClient {
     if (message.gameOver) {
       this.showMessage('🎉 Game Over! ' + message.result);
     }
+    // Reset selection after action
+    this.resetSelection();
+  }
+
+  private handleMoveResult(message: ServerMessage): void {
+    if (message.success) {
+      this.showMessage('Tank moved successfully!');
+    } else {
+      this.showError(message.error || 'Cannot move tank there!');
+    }
+    // Reset selection after action
+    this.resetSelection();
   }
 
   private handleChat(message: ChatMessage & { type: string }): void {
@@ -246,6 +267,7 @@ class FogOfTankClient {
       this.gameState = null;
       this.gameId = null;
       this.playerId = null;
+      this.resetSelection();
     }
   }
 
@@ -308,17 +330,55 @@ class FogOfTankClient {
       }
     }
 
-    // Highlight selected cell
-    if (this.selectedCell && isMyBoard) {
+    // Highlight selected tank (source for move)
+    if (this.selectedTankCell && isMyBoard) {
       ctx.strokeStyle = '#ff6b35';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.strokeRect(
-        this.selectedCell.x * this.cellSize + 2,
-        this.selectedCell.y * this.cellSize + 2,
+        this.selectedTankCell.x * this.cellSize + 2,
+        this.selectedTankCell.y * this.cellSize + 2,
         this.cellSize - 4,
         this.cellSize - 4
       );
     }
+
+    // Show valid move positions if in move mode and tank is selected
+    if (this.actionState === 'move' && this.selectedTankCell && isMyBoard) {
+      this.highlightValidMoves(ctx, this.selectedTankCell.x, this.selectedTankCell.y, board);
+    }
+  }
+
+  private highlightValidMoves(ctx: CanvasRenderingContext2D, tankX: number, tankY: number, board: number[][]): void {
+    const moves = [
+      { x: tankX - 1, y: tankY },     // Left
+      { x: tankX + 1, y: tankY },     // Right
+      { x: tankX, y: tankY - 1 },     // Up
+      { x: tankX, y: tankY + 1 }      // Down
+    ];
+
+    ctx.fillStyle = 'rgba(76, 175, 80, 0.3)'; // Semi-transparent green
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 2;
+
+    moves.forEach(move => {
+      if (this.isValidMove(move.x, move.y, board)) {
+        const cellX = move.x * this.cellSize;
+        const cellY = move.y * this.cellSize;
+
+        ctx.fillRect(cellX + 1, cellY + 1, this.cellSize - 2, this.cellSize - 2);
+        ctx.strokeRect(cellX + 1, cellY + 1, this.cellSize - 2, this.cellSize - 2);
+      }
+    });
+  }
+
+  private isValidMove(x: number, y: number, board: number[][]): boolean {
+    // Check bounds
+    if (x < 0 || x >= this.boardSize || y < 0 || y >= this.boardSize) {
+      return false;
+    }
+
+    // Check if cell is empty
+    return board[y][x] === CellState.EMPTY;
   }
 
   private drawCell(ctx: CanvasRenderingContext2D, x: number, y: number, cellState: number, isMyBoard: boolean): void {
@@ -386,8 +446,60 @@ class FogOfTankClient {
       if (x >= 0 && x < this.boardSize && y >= 0 && y < this.boardSize) {
         this.placeTank(x, y);
       }
-    } else if (this.gamePhase === 'battle' ) {
+    } else if (this.gamePhase === 'battle' && this.isMyTurn) {
+      if (x >= 0 && x < this.boardSize && y >= 0 && y < this.boardSize) {
+        this.handleBattlePhaseClick(x, y);
+      }
     }
+  }
+
+  // TODO: Fix logic for moving the tanks
+  //       1. Either move or attack
+  private handleBattlePhaseClick(x: number, y: number): void {
+    if (!this.gameState) return;
+
+    const cellState = this.gameState.myBoard[y][x];
+
+    if (this.actionState === 'attack') {
+      if (cellState === CellState.TANK) {
+        this.selectedTankCell = { x, y };
+        this.toggleActionMode()
+        this.drawBoards();
+      }
+    } else if (this.actionState === 'move') {
+      if (cellState === CellState.TANK && this.selectedTankCell) {
+        if (x === this.selectedTankCell.x && y === this.selectedTankCell.y) { // Toggle move mode if clicked itself
+          this.showMessage("Move mode disabled");
+          this.selectedTankCell = null;
+          this.toggleActionMode()
+          this.drawBoards();
+        } else { // Select other tank if clicked on other tank
+          this.selectedTankCell = { x, y };
+          this.showMessage("Another tank selected to move");
+          this.drawBoards();
+        }
+      } else if (cellState === CellState.EMPTY && this.selectedTankCell) {
+        // Try to move selected tank to this empty cell
+        if (this.isValidMovePosition(x, y)) {
+          this.moveTank(this.selectedTankCell.x, this.selectedTankCell.y, x, y);
+          this.drawBoards();
+        } else {
+          this.showError('You can only move to adjacent empty cells!');
+        }
+      }
+    }
+  }
+
+  private isValidMovePosition(targetX: number, targetY: number): boolean {
+    if (!this.selectedTankCell || !this.gameState) return false;
+
+    const { x: fromX, y: fromY } = this.selectedTankCell;
+
+    // Check if target is adjacent (one cell away in cardinal directions)
+    const dx = Math.abs(targetX - fromX);
+    const dy = Math.abs(targetY - fromY);
+
+    return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
   }
 
   private handleEnemyBoardClick(event: MouseEvent): void {
@@ -398,7 +510,11 @@ class FogOfTankClient {
     const y = Math.floor((event.clientY - rect.top) / this.cellSize);
 
     if (x >= 0 && x < this.boardSize && y >= 0 && y < this.boardSize) {
-      this.bomb(x, y);
+      if (this.actionState === 'attack') {
+        this.bomb(x, y);
+      } else {
+        this.showMessage('Switch to Attack mode to bomb enemy positions!');
+      }
     }
   }
 
@@ -417,6 +533,30 @@ class FogOfTankClient {
       x: x,
       y: y
     });
+  }
+
+  private moveTank(fromX: number, fromY: number, toX: number, toY: number): void {
+    this.sendMessage({
+      type: 'moveTank',
+      fromX: fromX,
+      fromY: fromY,
+      toX: toX,
+      toY: toY
+    });
+  }
+
+  public toggleActionMode(): void {
+    if (this.gamePhase !== 'battle') return;
+
+    this.actionState = this.actionState === 'attack' ? 'move' : 'attack';
+    this.updateUI();
+    this.drawBoards();
+  }
+
+  private resetSelection(): void {
+    this.selectedCell = null;
+    this.selectedTankCell = null;
+    this.actionState = 'attack';
   }
 
   public sendChat(): void {
@@ -467,11 +607,12 @@ class FogOfTankClient {
     const playerTanksElement = document.getElementById('playerTanks') as HTMLElement;
     playerTanksElement.textContent = this.gameState.myTanks.toString();
 
-    // Update turn indicator
+    // Update turn indicator and action mode
     const turnIndicator = document.getElementById('turnIndicator') as HTMLElement;
     if (this.gamePhase === 'battle') {
       if (this.isMyTurn) {
-        turnIndicator.textContent = 'Your Turn - Click enemy board to bomb!';
+        const actionText = this.actionState === 'attack' ? 'Attack Mode - Click enemy board to bomb!' : 'Move Mode - Select tank, then click adjacent cell!';
+        turnIndicator.textContent = `Your Turn - ${actionText}`;
         turnIndicator.className = 'turn-indicator your-turn';
       } else {
         turnIndicator.textContent = `${enemyPlayer?.name || 'Enemy'}'s Turn`;
@@ -490,6 +631,18 @@ class FogOfTankClient {
     } else {
       turnIndicator.textContent = 'Waiting...';
       turnIndicator.className = 'turn-indicator waiting-turn';
+    }
+
+    // Update action mode button
+    const actionButton = document.getElementById('actionModeButton') as HTMLButtonElement;
+    if (actionButton) {
+      if (this.gamePhase === 'battle' && this.isMyTurn) {
+        actionButton.style.display = 'inline-block';
+        actionButton.textContent = this.actionState === 'attack' ? 'Switch to Move' : 'Switch to Attack';
+        actionButton.className = `button ${this.actionState === 'attack' ? 'attack-mode' : 'move-mode'}`;
+      } else {
+        actionButton.style.display = 'none';
+      }
     }
   }
 
