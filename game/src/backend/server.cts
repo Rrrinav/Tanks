@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { WebSocket, WebSocketServer } from 'ws';
 
+const DEBUG = false
+
 // Game Constants
 const BOARD_SIZE = 6;
 const TANKS_PER_PLAYER = 3;
@@ -196,6 +198,12 @@ class GameManager {
       game.phase = GamePhase.PLACEMENT;
       game.startTime = Date.now();
       console.log(`Game ${gameId} entering placement phase with players: ${game.players.map(p => p.name).join(' vs ')}`);
+    }
+
+    if (DEBUG && game.id === '1234') {
+      game.phase = GamePhase.PLACEMENT;
+      game.players[0].ready = true;
+      console.log(`DEBUG mode: Auto-starting game ${gameId} with one player.`);
     }
 
     this.broadcastGameState(game);
@@ -528,12 +536,15 @@ class GameManager {
 
   handleMessage(ws: WebSocket, message: GameMessage): void {
     const connection = this.playerConnections.get(ws);
-
     try {
       switch (message.type) {
         case 'join':
           const gameId = message.gameId;
-
+          if (DEBUG && gameId === '1234' && !this.games.has(gameId)) {
+            // Automatically create the debug room if it doesn't exist
+            console.log("DEBUG: Creating room '1234' for single-player testing.");
+            this.createGame(gameId);
+          }
           if (gameId && !this.games.has(gameId.toUpperCase())) {
             // Try to create game with custom room ID
             try {

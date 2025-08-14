@@ -5,228 +5,260 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fog of Tank</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <style>
+        :root {
+            --bg: #0f1419;
+            --surface: rgba(25, 30, 41, 0.8);
+            --accent: #00d4ff;
+            --accent-dim: #0891b2;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
         body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-            color: white;
-            overflow-x: hidden;
+            font-family: "Inter", system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f1419 0%, #1a202c 100%);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(600px circle at 50% 50%, rgba(0, 212, 255, 0.05), transparent);
+            pointer-events: none;
+            z-index: -1;
         }
 
         .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
+            width: 100%;
+            max-width: 1200px;
+            animation: fadeInUp 0.6s ease-out;
         }
 
+        /* Header */
         .header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 32px;
         }
 
         .header h1 {
-            font-size: 3em;
-            color: #ff6b35;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            margin-bottom: 10px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
 
         .header p {
-            font-size: 1.2em;
-            color: #ccc;
+            color: var(--text-dim);
+            font-size: 1rem;
+            font-weight: 400;
         }
 
-        .game-area {
-            display: none;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 30px;
-            align-items: start;
-        }
-
+        /* Panels */
+        .menu-screen,
+        .game-info,
         .board-container {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 15px;
-            padding: 20px;
-            border: 2px solid #333;
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.2s ease;
         }
 
-        .board-title {
+        .menu-screen:hover,
+        .game-info:hover,
+        .board-container:hover {
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        .menu-screen h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 24px;
             text-align: center;
-            margin-bottom: 15px;
-            font-size: 1.4em;
-            color: #ff6b35;
         }
 
-        #gameCanvas {
-            border: 3px solid #555;
-            border-radius: 10px;
-            background: #2a2a2a;
-            cursor: crosshair;
-        }
-
-        .game-info {
-            background: rgba(0, 0, 0, 0.4);
-            border-radius: 15px;
-            padding: 25px;
-            border: 2px solid #333;
-            min-width: 300px;
-            max-width: 350px;
-        }
-
-        .status-section {
-            margin-bottom: 25px;
-        }
-
-        .status-section h3 {
-            color: #ff6b35;
-            margin-bottom: 10px;
-            font-size: 1.3em;
-        }
-
-        .player-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-
-        .player-name {
-            font-weight: bold;
-            color: #4CAF50;
-        }
-
-        .enemy-name {
-            color: #f44336;
-        }
-
-        .turn-indicator {
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-
-        .your-turn {
-            background: #4CAF50;
-            color: white;
-        }
-
-        .enemy-turn {
-            background: #f44336;
-            color: white;
-        }
-
-        .waiting-turn {
-            background: #666;
-            color: white;
-        }
-
-        .controls {
-            margin-top: 20px;
+        /* Buttons */
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
         .button {
-            background: linear-gradient(45deg, #ff6b35, #f44336);
-            color: white;
+            background: var(--accent);
+            color: #000;
             border: none;
-            padding: 12px 24px;
+            padding: 14px 20px;
             border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 1em;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            margin: 5px;
-            text-transform: uppercase;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.4);
+            background: var(--accent-dim);
+            transform: translateY(-1px);
+        }
+
+        .button:active {
+            transform: translateY(0);
         }
 
         .button:disabled {
-            background: #666;
+            background: var(--text-dim);
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
         }
 
-        .menu-screen {
-            text-align: center;
-            max-width: 600px;
-            margin: 0 auto;
-            background: rgba(0, 0, 0, 0.4);
-            padding: 40px;
-            border-radius: 20px;
-            border: 2px solid #333;
+        .back-button {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-bottom: 16px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: fit-content;
         }
 
-        .menu-buttons {
-            margin: 30px 0;
+        .back-button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
-        .menu-buttons .button {
-            display: block;
-            width: 100%;
-            margin: 15px 0;
-            padding: 15px;
-            font-size: 1.2em;
-        }
-
+        /* Inputs */
         .input-group {
-            margin: 20px 0;
-            text-align: left;
+            margin: 16px 0;
         }
 
         .input-group label {
             display: block;
-            margin-bottom: 8px;
-            color: #ccc;
-            font-weight: bold;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 6px;
         }
 
         .input-group input {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #555;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
             border-radius: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 1em;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
         }
 
         .input-group input:focus {
-            border-color: #ff6b35;
             outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
         }
 
+        .input-group small {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            margin-top: 4px;
+            display: block;
+        }
+
+        /* Games List */
         .games-list {
-            max-height: 400px;
+            margin-top: 16px;
+            max-height: 300px;
             overflow-y: auto;
-            margin: 20px 0;
-            border: 2px solid #333;
-            border-radius: 10px;
+        }
+
+        .games-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .games-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .games-list::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
         }
 
         .game-item {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            margin: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
             border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
 
         .game-item:hover {
-            background: rgba(255, 107, 53, 0.2);
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(0, 212, 255, 0.3);
         }
 
         .game-item.full {
@@ -234,167 +266,288 @@
             cursor: not-allowed;
         }
 
-        .game-id {
-            font-weight: bold;
-            color: #ff6b35;
-            font-size: 1.2em;
+        .game-item-info .game-id {
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 4px;
         }
 
-        .game-players {
-            color: #ccc;
-            margin-top: 5px;
+        .game-item-info .game-players {
+            font-size: 0.9rem;
+            color: var(--text-dim);
         }
 
-        .chat-container {
-            margin-top: 20px;
-            border-top: 2px solid #333;
-            padding-top: 20px;
+        .game-item-action .button {
+            padding: 8px 16px;
+            font-size: 0.85rem;
         }
 
-        .chat-messages {
-            background: rgba(0, 0, 0, 0.3);
-            height: 150px;
-            overflow-y: auto;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #555;
-            margin-bottom: 10px;
+        /* Game Area */
+        .game-area {
+            display: none;
+            grid-template-columns: 1fr 320px 1fr;
+            gap: 24px;
+            align-items: start;
         }
 
-        .chat-message {
-            margin-bottom: 8px;
-            padding: 5px;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .chat-input-group {
-            display: flex;
-            gap: 10px;
-        }
-
-        .chat-input-group input {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid #555;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-        }
-
-        .legend {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-        }
-
-        .legend h4 {
-            color: #ff6b35;
-            margin-bottom: 10px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin: 5px 0;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 3px;
-            margin-right: 10px;
-            border: 1px solid #333;
-        }
-
-        .phase-indicator {
-            padding: 15px;
-            border-radius: 8px;
+        .board-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--accent);
             text-align: center;
-            font-size: 1.3em;
-            font-weight: bold;
+            margin-bottom: 16px;
+        }
+
+        #gameCanvas,
+        #enemyCanvas {
+            background: #1a1a2e;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            aspect-ratio: 1;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Phase Indicator */
+        .phase-indicator {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
             margin-bottom: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
         }
 
         .phase-waiting {
-            background: #666;
+            background: var(--text-dim);
             color: white;
         }
 
         .phase-placement {
-            background: #2196F3;
+            background: #3b82f6;
             color: white;
         }
 
         .phase-battle {
-            background: #f44336;
+            background: var(--danger);
             color: white;
+            animation: pulse 2s ease infinite;
         }
 
         .phase-gameover {
-            background: #4CAF50;
+            background: var(--success);
             color: white;
         }
 
-        .error-message {
-            background: #f44336;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
+        /* Status Section */
+        .status-section h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 0.95rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .player-info:last-child {
+            border-bottom: none;
+        }
+
+        .turn-indicator {
             text-align: center;
+            margin-top: 16px;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.9rem;
         }
 
-        .success-message {
-            background: #4CAF50;
+        .turn-indicator.my-turn {
+            background: var(--success);
             color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            text-align: center;
         }
 
-        @media (max-width: 1200px) {
+        .turn-indicator.enemy-turn {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .controls .button {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text);
+            font-size: 0.9rem;
+            padding: 12px 16px;
+        }
+
+        .controls .button:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .controls .button.active {
+            background: var(--accent);
+            color: #000;
+        }
+
+        /* Legend */
+        .legend {
+            flex: column;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .legend h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        #legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        /* Chat */
+        .chat-container {
+            margin-top: 24px;
+        }
+
+        .chat-container h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .chat-messages {
+            height: 120px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 2px;
+        }
+
+        .chat-input-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .chat-input-group input {
+            flex: 1;
+            margin: 0;
+        }
+
+        .chat-input-group .button {
+            padding: 12px;
+            margin: 0;
+            width: auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
             .game-area {
                 grid-template-columns: 1fr;
-                text-align: center;
+                gap: 20px;
             }
 
             .game-info {
-                max-width: 100%;
-                margin: 0 auto;
+                order: 1;
+            }
+
+            .board-container:first-of-type {
+                order: 2;
+            }
+
+            .board-container:last-of-type {
+                order: 3;
+            }
+
+            #gameCanvas,
+            #enemyCanvas {
+                max-width: 350px;
             }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 640px) {
+            body {
+                padding: 16px;
+            }
+
             .header h1 {
-                font-size: 2em;
+                font-size: 2rem;
             }
 
-            #gameCanvas {
-                max-width: 100%;
-                height: auto;
-            }
-
-            .menu-screen {
+            .menu-screen,
+            .game-info,
+            .board-container {
                 padding: 20px;
             }
+
+            .game-area {
+                gap: 16px;
+            }
+
+            #gameCanvas,
+            #enemyCanvas {
+                max-width: 300px;
+            }
         }
 
-        .back-button {
-            background: linear-gradient(45deg, #666, #444);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            margin-bottom: 20px;
-        }
-
-        .back-button:hover {
-            background: linear-gradient(45deg, #777, #555);
+        /* Hidden screens */
+        .menu-screen[style*="none"] {
+            display: none;
         }
     </style>
 </head>
@@ -402,72 +555,87 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚗 Fog of Tank</h1>
+            <h1><i class="fa-solid fa-crosshairs"></i> Fog of Tank</h1>
             <p>Strategic tank warfare in the fog of war</p>
         </div>
 
-        <!-- Main Menu -->
         <div id="mainMenu" class="menu-screen">
-            <h2>Welcome to Fog of Tank!</h2>
+            <h2>Welcome, Commander!</h2>
             <div class="menu-buttons">
-                <button class="button" onclick="showCreateRoomMenu()">Create Room</button>
-                <button class="button" onclick="showJoinRoomMenu()">Join Room</button>
-                <button class="button" onclick="showBrowseGames()">Browse Games</button>
-                <button class="button" onclick="quickMatch()">Quick Match</button>
+                <button class="button" onclick="showCreateRoomMenu()">
+                    <i class="fa-solid fa-plus"></i> Create Room
+                </button>
+                <button class="button" onclick="showJoinRoomMenu()">
+                    <i class="fa-solid fa-door-open"></i> Join Room
+                </button>
+                <button class="button" onclick="showBrowseGames()">
+                    <i class="fa-solid fa-list"></i> Browse Games
+                </button>
+                <button class="button" onclick="quickMatch()">
+                    <i class="fa-solid fa-bolt"></i> Quick Match
+                </button>
             </div>
         </div>
 
-        <!-- Create Room Menu -->
         <div id="createRoomMenu" class="menu-screen" style="display: none;">
-            <button class="back-button" onclick="showMainMenu()">← Back</button>
+            <button class="back-button" onclick="showMainMenu()">
+                <i class="fa-solid fa-arrow-left"></i> Back
+            </button>
             <h2>Create Room</h2>
             <div class="input-group">
-                <label for="playerNameCreate">Your Name:</label>
+                <label for="playerNameCreate">Your Name</label>
                 <input type="text" id="playerNameCreate" placeholder="Enter your name" maxlength="20">
             </div>
             <div class="input-group">
-                <label for="customRoomId">Room ID (optional):</label>
+                <label for="customRoomId">Room ID (optional)</label>
                 <input type="text" id="customRoomId" placeholder="Leave empty for random ID" maxlength="10">
-                <small style="color: #ccc; display: block; margin-top: 5px;">4-10 alphanumeric characters</small>
+                <small>4-10 alphanumeric characters</small>
             </div>
-            <button class="button" onclick="createRoom()">Create Room</button>
+            <button class="button" onclick="createRoom()">
+                <i class="fa-solid fa-hammer"></i> Create Room
+            </button>
             <div id="createRoomMessages"></div>
         </div>
 
-        <!-- Join Room Menu -->
         <div id="joinRoomMenu" class="menu-screen" style="display: none;">
-            <button class="back-button" onclick="showMainMenu()">← Back</button>
+            <button class="back-button" onclick="showMainMenu()">
+                <i class="fa-solid fa-arrow-left"></i> Back
+            </button>
             <h2>Join Room</h2>
             <div class="input-group">
-                <label for="playerNameJoin">Your Name:</label>
+                <label for="playerNameJoin">Your Name</label>
                 <input type="text" id="playerNameJoin" placeholder="Enter your name" maxlength="20">
             </div>
             <div class="input-group">
-                <label for="roomIdJoin">Room ID:</label>
+                <label for="roomIdJoin">Room ID</label>
                 <input type="text" id="roomIdJoin" placeholder="Enter room ID" maxlength="10">
             </div>
-            <button class="button" onclick="joinRoom()">Join Room</button>
+            <button class="button" onclick="joinRoom()">
+                <i class="fa-solid fa-door-open"></i> Join Room
+            </button>
             <div id="joinRoomMessages"></div>
         </div>
 
-        <!-- Browse Games Menu -->
         <div id="browseGamesMenu" class="menu-screen" style="display: none;">
-            <button class="back-button" onclick="showMainMenu()">← Back</button>
+            <button class="back-button" onclick="showMainMenu()">
+                <i class="fa-solid fa-arrow-left"></i> Back
+            </button>
             <h2>Available Games</h2>
             <div class="input-group">
-                <label for="playerNameBrowse">Your Name:</label>
+                <label for="playerNameBrowse">Your Name</label>
                 <input type="text" id="playerNameBrowse" placeholder="Enter your name" maxlength="20">
             </div>
-            <button class="button" onclick="refreshGamesList()">Refresh List</button>
+            <button class="button" onclick="refreshGamesList()">
+                <i class="fa-solid fa-sync"></i> Refresh List
+            </button>
             <div id="gamesList" class="games-list"></div>
             <div id="browseGamesMessages"></div>
         </div>
 
-        <!-- Game Area -->
         <div id="gameArea" class="game-area">
             <div class="board-container">
                 <div class="board-title">Your Board</div>
-                <canvas id="gameCanvas" width="480" height="480"></canvas>
+                <canvas id="gameCanvas" width="400" height="400"></canvas>
             </div>
 
             <div class="game-info">
@@ -479,65 +647,71 @@
                     <h3>Game Status</h3>
                     <div id="gameStatus">
                         <div id="playerInfo" class="player-info">
-                            <div>You: <span id="playerName" class="player-name">-</span></div>
-                            <div>Tanks: <span id="playerTanks">0</span></div>
+                            <span>You: <span id="playerName">-</span></span>
+                            <span>Tanks: <span id="playerTanks">0</span></span>
                         </div>
                         <div id="enemyInfo" class="player-info">
-                            <div>Enemy: <span id="enemyName" class="enemy-name">-</span></div>
-                            <div>Tanks: <span id="enemyTanks">0</span></div>
+                            <span>Enemy: <span id="enemyName">-</span></span>
+                            <span>Tanks: <span id="enemyTanks">0</span></span>
                         </div>
-                        <div id="turnIndicator" class="turn-indicator waiting-turn">
+                        <div id="turnIndicator" class="turn-indicator">
                             Waiting...
                         </div>
                     </div>
                 </div>
 
-                <div id="gameControls" class="controls">
-                    <button class="button" onclick="leaveGame()">Leave Game</button>
+                <div class="controls">
+                    <button class="button" id="leaveGameButton" onclick="leaveGame()">
+                        Leave Game <span id="game-id-info"></span>
+                    </button>
                 </div>
 
                 <div class="legend">
                     <h4>Legend</h4>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #4CAF50;"></div>
-                        <span>Your Tank</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #f44336;"></div>
-                        <span>Enemy Tank</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #FF9800;"></div>
-                        <span>Hit</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #2196F3;"></div>
-                        <span>Miss</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #666;"></div>
-                        <span>Revealed</span>
+                    <div id="legend-items">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #10b981;"></div>
+                            <span>Your Tank</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #ef4444;"></div>
+                            <span>Enemy Tank</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #f59e0b;"></div>
+                            <span>Hit</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #3b82f6;"></div>
+                            <span>Miss</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #64748b;"></div>
+                            <span>Revealed</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="chat-container">
-                    <h4 style="color: #ff6b35; margin-bottom: 10px;">Chat</h4>
+                    <h4>Chat</h4>
                     <div id="chatMessages" class="chat-messages"></div>
                     <div class="chat-input-group">
                         <input type="text" id="chatInput" placeholder="Type message..." maxlength="200">
-                        <button class="button" style="margin: 0;" onclick="sendChat()">Send</button>
+                        <button class="button" onclick="sendChat()">
+                                Send
+                        </button>
                     </div>
                 </div>
             </div>
 
             <div class="board-container">
                 <div class="board-title">Enemy Board</div>
-                <canvas id="enemyCanvas" width="480" height="480"></canvas>
+                <canvas id="enemyCanvas" width="400" height="400"></canvas>
             </div>
         </div>
     </div>
 
-    <script src="./dist/client/index.js" type="module"> </script>
+    <script src="./dist/client/index.js" type="module"></script>
 </body>
 
 </html>

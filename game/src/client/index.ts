@@ -1,3 +1,5 @@
+import { PassThrough } from "stream";
+
 // Types and interfaces
 interface GameState {
   myBoard: number[][];
@@ -49,6 +51,63 @@ enum CellState {
   MISS = 3,
   REVEALED = 4
 }
+interface Images {
+  id: string;
+  image: HTMLImageElement;
+}
+
+interface ImageAssets {
+  id: string;
+  path: string;
+}
+
+class AssetsManager {
+  private images: Images[] = [];
+
+  constructor() {
+    console.log("AssetsManager initialized.");
+  }
+
+  loadImage(id: string, path: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const imageElement = new Image();
+      imageElement.src = path;
+
+      imageElement.onload = () => {
+        this.images.push({ id: id, image: imageElement });
+        console.log(`Image loaded successfully: ${id} from ${path}`);
+        resolve(imageElement);
+      };
+      imageElement.onerror = () => {
+        console.error(`Failed to load image: ${id} from ${path}`);
+        reject(new Error(`Failed to load image: ${id}`));
+      };
+    });
+  }
+
+  getImage(id: string): HTMLImageElement | null {
+    const found = this.images.find(asset => asset.id === id);
+    return found ? found.image : null;
+  }
+
+  preloadAssets(imageAssets: ImageAssets[]): Promise<void> {
+    console.log("Starting asset preloading...");
+
+    // Create an array of Promises, one for each image load.
+    const loadingPromises = imageAssets.map(asset => this.loadImage(asset.id, asset.path));
+
+    // Use Promise.all to wait for all assets to be loaded.
+    return Promise.all(loadingPromises)
+      .then(() => {
+        console.log("All assets preloaded successfully!");
+      })
+      .catch(error => {
+        console.error("Failed to preload all assets:", error);
+        throw error;
+      });
+  }
+}
+
 
 class FogOfTankClient {
   ws: WebSocket | null = null;
@@ -62,6 +121,7 @@ class FogOfTankClient {
   private isMyTurn: boolean = false;
   private playerId: string | null = null;
   private actionState: ActionState = 'attack';
+  private assetManager: AssetsManager;
   gameId: string | null = null;
 
   private gameCanvas!: HTMLCanvasElement;
@@ -70,8 +130,17 @@ class FogOfTankClient {
   private enemyCtx!: CanvasRenderingContext2D;
 
   constructor() {
+    const images: ImageAssets[] = [
+      { id: "myHull", path: "../../assets/tanks/PNG/Hulls_Color_A/Hull_02.png" },
+      { id: "enemyHull", path: "../../assets/tanks/PNG/Hulls_Color_B/Hull_01.png" },
+
+      { id: "myWeapon", path: "../../assets/tanks/PNG/Weapon_Color_A_256X256/Gun_06.png" },
+      { id: "enemyWeapon", path: "../../assets/tanks/PNG/Weapon_Color_B_256X256/Gun_01.png" },
+    ]
     this.initializeCanvases();
     this.connectWebSocket();
+    this.assetManager = new AssetsManager();
+    this.assetManager.preloadAssets(images);
   }
 
   private initializeCanvases(): void {
@@ -204,6 +273,9 @@ class FogOfTankClient {
       this.playerId = message.playerId;
       this.boardSize = message.boardSize;
       this.tanksPerPlayer = message.tanksPerPlayer;
+
+      let idInfo = document.getElementById("game-id-info") as HTMLElement;
+      idInfo.innerHTML = `(id: ${this.gameId})`;
 
       const playerNameElement = document.getElementById('playerName') as HTMLElement;
       playerNameElement.textContent = message.playerName;
@@ -385,27 +457,64 @@ class FogOfTankClient {
     const cellX = x * this.cellSize;
     const cellY = y * this.cellSize;
 
+    // Set the fill style for the cell background
     ctx.fillStyle = this.getCellColor(cellState, isMyBoard);
     ctx.fillRect(cellX + 1, cellY + 1, this.cellSize - 2, this.cellSize - 2);
 
-    // Draw cell symbol
-    const symbol = this.getCellSymbol(cellState);
-    if (symbol) {
-      ctx.fillStyle = '#fff';
-      ctx.font = '24px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(
-        symbol,
-        cellX + this.cellSize / 2,
-        cellY + this.cellSize / 2 + 8
-      );
+    if (cellState === CellState.TANK) {
+      // Check if the tank images are loaded before drawing
+      const hullImage = isMyBoard ? this.assetManager.getImage('myHull') : this.assetManager.getImage('enemyHull');
+      const weaponImage = isMyBoard ? this.assetManager.getImage('myWeapon') : this.assetManager.getImage('enemyWeapon');
+
+      if (hullImage && weaponImage) {
+        // Calculate the scaling factor to fit the image inside the cell
+        const scale = Math.min(this.cellSize / hullImage.width, this.cellSize / hullImage.height);
+        const scaledWidth = hullImage.width * scale;
+        const scaledHeight = hullImage.height * scale;
+
+        // Save the current canvas state before applying transformations
+        ctx.save();
+        // Move the origin to the center of the cell for rotation
+        ctx.translate(cellX + this.cellSize / 2, cellY + this.cellSize / 2);
+
+        // Apply the rotation based on which board it is
+        if (isMyBoard) {
+          ctx.rotate(Math.PI / 2); // Rotate 90 degrees (pi/2 radians)
+        } else {
+          ctx.rotate(-(Math.PI / 2)); // Rotate -90 degrees (-pi/2 radians)
+        }
+
+        // Draw the hull and weapon relative to the new origin (0,0)
+        // The images are centered by subtracting half their scaled width and height
+        ctx.drawImage(hullImage, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+
+        // Cleaned up weapon drawing logic without changing the original offsets
+        // These are hardcoded offsets relative to the hull's top-left corner
+        ctx.drawImage(weaponImage, -scaledWidth / 2, -scaledHeight / 2, weaponImage.width * scale, weaponImage.height * scale);
+
+        // Restore the canvas state to remove the transformations
+        ctx.restore();
+      }
+    } else {
+      // Draw other symbols as before
+      const symbol = this.getCellSymbol(cellState);
+      if (symbol) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(
+          symbol,
+          cellX + this.cellSize / 2,
+          cellY + this.cellSize / 2 + 8
+        );
+      }
     }
   }
 
   private getCellColor(cellState: number, isMyBoard: boolean): string {
     switch (cellState) {
       case CellState.TANK:
-        return isMyBoard ? '#4CAF50' : '#f44336';
+        return isMyBoard ? '#666' : '#f44336';
       case CellState.HIT:
         return '#FF9800';
       case CellState.MISS:
