@@ -6,7 +6,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 const DEBUG = false
 
 // Game Constants
-const BOARD_SIZE = 6;
+const BOARD_SIZE = 8;
 const TANKS_PER_PLAYER = 3;
 const EXPLOSION_RADIUS = 1;
 const PORT = 3000;

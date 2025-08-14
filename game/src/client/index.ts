@@ -1,5 +1,3 @@
-import { PassThrough } from "stream";
-
 // Types and interfaces
 interface GameState {
   myBoard: number[][];
@@ -51,6 +49,7 @@ enum CellState {
   MISS = 3,
   REVEALED = 4
 }
+
 interface Images {
   id: string;
   image: HTMLImageElement;
@@ -112,8 +111,8 @@ class AssetsManager {
 class FogOfTankClient {
   ws: WebSocket | null = null;
   private gameState: GameState | null = null;
-  private boardSize: number = 6;
-  private cellSize: number = 80;
+  private boardSize: number = 8;
+  private cellSize: number = 50;
   private tanksPerPlayer: number = 3;
   private selectedCell: SelectedCell | null = null;
   private selectedTankCell: SelectedCell | null = null;
@@ -423,9 +422,17 @@ class FogOfTankClient {
   private highlightValidMoves(ctx: CanvasRenderingContext2D, tankX: number, tankY: number, board: number[][]): void {
     const moves = [
       { x: tankX - 1, y: tankY },     // Left
+      { x: tankX - 2, y: tankY },     // Left + 1
       { x: tankX + 1, y: tankY },     // Right
-      { x: tankX, y: tankY - 1 },     // Up
-      { x: tankX, y: tankY + 1 }      // Down
+      { x: tankX + 2, y: tankY },     // Right + 1
+      { x: tankX,     y: tankY - 1 }, // Up
+      { x: tankX,     y: tankY - 2 }, // Up + 1
+      { x: tankX,     y: tankY + 1 },  // Down
+      { x: tankX,     y: tankY + 2 },  // Down + 1
+      { x: tankX + 1, y: tankY + 1 },
+      { x: tankX - 1, y: tankY - 1 },
+      { x: tankX - 1, y: tankY + 1 },
+      { x: tankX + 1, y: tankY - 1 },
     ];
 
     ctx.fillStyle = 'rgba(76, 175, 80, 0.3)'; // Semi-transparent green
@@ -562,8 +569,6 @@ class FogOfTankClient {
     }
   }
 
-  // TODO: Fix logic for moving the tanks
-  //       1. Either move or attack
   private handleBattlePhaseClick(x: number, y: number): void {
     if (!this.gameState) return;
 
@@ -593,7 +598,7 @@ class FogOfTankClient {
           this.moveTank(this.selectedTankCell.x, this.selectedTankCell.y, x, y);
           this.drawBoards();
         } else {
-          this.showError('You can only move to adjacent empty cells!');
+          this.showError('You can only move to highlighted empty cells!');
         }
       }
     }
@@ -604,11 +609,20 @@ class FogOfTankClient {
 
     const { x: fromX, y: fromY } = this.selectedTankCell;
 
-    // Check if target is adjacent (one cell away in cardinal directions)
     const dx = Math.abs(targetX - fromX);
     const dy = Math.abs(targetY - fromY);
 
-    return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+    // Allow up to 2 steps in straight lines
+    if ((dx <= 2 && dy === 0) || (dy <= 2 && dx === 0)) {
+      return true;
+    }
+
+    // Allow exactly 1 step diagonally
+    if (dx === 1 && dy === 1) {
+      return true;
+    }
+
+    return false;
   }
 
   private handleEnemyBoardClick(event: MouseEvent): void {
