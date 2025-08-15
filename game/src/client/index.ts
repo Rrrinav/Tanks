@@ -50,18 +50,19 @@ enum CellState {
   REVEALED = 4
 }
 
-interface Images {
+interface Image {
   id: string;
   image: HTMLImageElement;
 }
 
-interface ImageAssets {
+interface ImageAsset {
   id: string;
   path: string;
 }
 
+
 class AssetsManager {
-  private images: Images[] = [];
+  private images: Image[] = [];
 
   constructor() {
     console.log("AssetsManager initialized.");
@@ -73,7 +74,7 @@ class AssetsManager {
       imageElement.src = path;
 
       imageElement.onload = () => {
-        this.images.push({ id: id, image: imageElement });
+        this.images.push({ id, image: imageElement });
         console.log(`Image loaded successfully: ${id} from ${path}`);
         resolve(imageElement);
       };
@@ -89,14 +90,12 @@ class AssetsManager {
     return found ? found.image : null;
   }
 
-  preloadAssets(imageAssets: ImageAssets[]): Promise<void> {
+  preloadAssets(imageAssets: ImageAsset[]): Promise<void> {
     console.log("Starting asset preloading...");
 
-    // Create an array of Promises, one for each image load.
-    const loadingPromises = imageAssets.map(asset => this.loadImage(asset.id, asset.path));
+    const imagePromises = imageAssets.map(asset => this.loadImage(asset.id, asset.path));
 
-    // Use Promise.all to wait for all assets to be loaded.
-    return Promise.all(loadingPromises)
+    return Promise.all(imagePromises)
       .then(() => {
         console.log("All assets preloaded successfully!");
       })
@@ -129,12 +128,15 @@ class FogOfTankClient {
   private enemyCtx!: CanvasRenderingContext2D;
 
   constructor() {
-    const images: ImageAssets[] = [
+    const images: ImageAsset[] = [
       { id: "myHull", path: "../../assets/tanks/PNG/Hulls_Color_A/Hull_02.png" },
       { id: "enemyHull", path: "../../assets/tanks/PNG/Hulls_Color_B/Hull_01.png" },
-
       { id: "myWeapon", path: "../../assets/tanks/PNG/Weapon_Color_A_256X256/Gun_06.png" },
       { id: "enemyWeapon", path: "../../assets/tanks/PNG/Weapon_Color_B_256X256/Gun_01.png" },
+      { id: "mist", path: "../../assets/mist.png" },
+      { id: "grave", path: "../../assets/grave.png" },
+      { id: "damaged", path: "../../assets/damaged.png" },
+      { id: "non-damaged", path: "../../assets/non-damaged.png" }
     ]
     this.initializeCanvases();
     this.connectWebSocket();
@@ -300,6 +302,7 @@ class FogOfTankClient {
     }
   }
 
+
   private handleBombResult(message: ServerMessage): void {
     this.showMessage(message.result);
     if (message.gameOver) {
@@ -425,10 +428,10 @@ class FogOfTankClient {
       { x: tankX - 2, y: tankY },     // Left + 1
       { x: tankX + 1, y: tankY },     // Right
       { x: tankX + 2, y: tankY },     // Right + 1
-      { x: tankX,     y: tankY - 1 }, // Up
-      { x: tankX,     y: tankY - 2 }, // Up + 1
-      { x: tankX,     y: tankY + 1 },  // Down
-      { x: tankX,     y: tankY + 2 },  // Down + 1
+      { x: tankX, y: tankY - 1 }, // Up
+      { x: tankX, y: tankY - 2 }, // Up + 1
+      { x: tankX, y: tankY + 1 },  // Down
+      { x: tankX, y: tankY + 2 },  // Down + 1
       { x: tankX + 1, y: tankY + 1 },
       { x: tankX - 1, y: tankY - 1 },
       { x: tankX - 1, y: tankY + 1 },
@@ -465,10 +468,17 @@ class FogOfTankClient {
     const cellY = y * this.cellSize;
 
     // Set the fill style for the cell background
-    ctx.fillStyle = this.getCellColor(cellState, isMyBoard);
-    ctx.fillRect(cellX + 1, cellY + 1, this.cellSize - 2, this.cellSize - 2);
+    const symbol = this.getCellImage(cellState, isMyBoard);
+    if (symbol) {
+      ctx.drawImage(symbol, cellX, cellY, this.cellSize, this.cellSize);
+    }
 
     if (cellState === CellState.TANK) {
+      if (!isMyBoard) {
+        const ground = this.assetManager.getImage("non-damaged");
+        if (ground)
+          ctx.drawImage(ground, cellX, cellY, this.cellSize, this.cellSize);
+      }
       // Check if the tank images are loaded before drawing
       const hullImage = isMyBoard ? this.assetManager.getImage('myHull') : this.assetManager.getImage('enemyHull');
       const weaponImage = isMyBoard ? this.assetManager.getImage('myWeapon') : this.assetManager.getImage('enemyWeapon');
@@ -504,17 +514,6 @@ class FogOfTankClient {
       }
     } else {
       // Draw other symbols as before
-      const symbol = this.getCellSymbol(cellState);
-      if (symbol) {
-        ctx.fillStyle = '#fff';
-        ctx.font = '24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(
-          symbol,
-          cellX + this.cellSize / 2,
-          cellY + this.cellSize / 2 + 8
-        );
-      }
     }
   }
 
@@ -533,16 +532,17 @@ class FogOfTankClient {
     }
   }
 
-  private getCellSymbol(cellState: number): string {
+  private getCellImage(cellState: number, isMyBoard: boolean): HTMLImageElement | null {
     switch (cellState) {
-      case CellState.TANK:
-        return '🚗';
       case CellState.HIT:
-        return '💥';
+        return this.assetManager.getImage("grave");
       case CellState.MISS:
-        return '💦';
+        return this.assetManager.getImage("damaged");
+      case CellState.REVEALED:
+        return this.assetManager.getImage("non-damaged");
       default:
-        return '';
+        if (!isMyBoard) return this.assetManager.getImage("mist");
+        else return null;
     }
   }
 
@@ -629,15 +629,37 @@ class FogOfTankClient {
     if (this.gamePhase !== 'battle' || !this.isMyTurn) return;
 
     const rect = this.enemyCanvas.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) / this.cellSize);
-    const y = Math.floor((event.clientY - rect.top) / this.cellSize);
 
+    // Get the actual canvas dimensions
+    const canvasWidth = this.enemyCanvas.width;
+    const canvasHeight = this.enemyCanvas.height;
+
+    // Calculate the actual cell size based on canvas dimensions
+    const actualCellWidth = canvasWidth / this.boardSize;
+    const actualCellHeight = canvasHeight / this.boardSize;
+
+    // Get relative position within the canvas
+    const relativeX = event.clientX - rect.left;
+    const relativeY = event.clientY - rect.top;
+
+    // Account for canvas scaling (display size vs actual size)
+    const scaleX = canvasWidth / rect.width;
+    const scaleY = canvasHeight / rect.height;
+
+    // Calculate the grid coordinates
+    const x = Math.floor((relativeX * scaleX) / actualCellWidth);
+    const y = Math.floor((relativeY * scaleY) / actualCellHeight);
+
+    // Validate coordinates
     if (x >= 0 && x < this.boardSize && y >= 0 && y < this.boardSize) {
       if (this.actionState === 'attack') {
+        console.log(`Bombing at (${x}, ${y})`); // Debug log
         this.bomb(x, y);
       } else {
         this.showMessage('Switch to Attack mode to bomb enemy positions!');
       }
+    } else {
+      console.log(`Invalid coordinates: (${x}, ${y}), canvas: ${canvasWidth}x${canvasHeight}, rect: ${rect.width}x${rect.height}`);
     }
   }
 

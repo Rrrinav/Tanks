@@ -318,7 +318,15 @@ class GameManager {
     if (tankIndex !== -1) {
       player.tanks[tankIndex] = { x: toX, y: toY };
     }
-
+    // After moving the tank, check if destination is in opponent's revealed area
+    const opponent = game.players[1 - playerId];
+    if (opponent.visibleEnemyBoard[toY][toX] === CellState.REVEALED) {
+      opponent.visibleEnemyBoard[toY][toX] = CellState.TANK;
+    }
+    // Also clear the old position if it was visible
+    if (opponent.visibleEnemyBoard[fromY][fromX] === CellState.TANK) {
+      opponent.visibleEnemyBoard[fromY][fromX] = CellState.REVEALED;
+    }
     game.actionTaken = true;
     this.switchTurn(game);
 
@@ -332,25 +340,25 @@ class GameManager {
     game.actionTaken = false; // Reset for the next player's turn
   }
 
-  bomb(gameId: string, playerId: number, x: number, y: number): { result: string; gameOver: boolean } {
+  bomb(gameId: string, playerId: number, x: number, y: number): { success: boolean; result: string; gameOver: boolean } {
     const game = this.games.get(gameId);
     if (!game || game.phase !== GamePhase.BATTLE || game.currentTurn !== playerId || game.actionTaken) {
-      return { result: 'Not your turn', gameOver: false };
+      return { result: 'Not your turn', gameOver: false, success: false };
     }
 
     const attacker = game.players[playerId];
     const defender = game.players[1 - playerId];
     if (!attacker || !defender) {
-      return { result: 'Invalid players', gameOver: false };
+      return { result: 'Invalid players', gameOver: false, success: false };
     }
 
     if (!Utils.isValidPosition(x, y)) {
-      return { result: 'Out of bounds', gameOver: false };
+      return { result: 'Out of bounds', gameOver: false, success: false };
     }
 
     // Check if already bombed
     if (attacker.visibleEnemyBoard[y][x] === CellState.HIT || attacker.visibleEnemyBoard[y][x] === CellState.MISS) {
-      return { result: 'Already bombed', gameOver: false };
+      return { result: 'Already bombed', gameOver: false, success: false };
     }
 
     let result = '';
@@ -374,7 +382,7 @@ class GameManager {
         result += ` VICTORY! All enemy tanks destroyed!`;
         console.log(`${attacker.name} wins game ${gameId}!`);
         this.broadcastGameUpdate(game);
-        return { result, gameOver: true };
+        return { result, gameOver: true, success: true };
       }
     } else {
       // MISS
@@ -385,8 +393,11 @@ class GameManager {
       console.log(`${attacker.name} missed at (${x}, ${y})`);
     }
 
-    // Reveal area around explosion
+    // Reveal area around explosion for attacker
     this.revealArea(attacker, defender, x, y);
+
+    // NEW: Update defender's board to show revealed areas
+    this.updateDefenderVisibility(defender, attacker, x, y);
 
     // Switch turns and increment move count
     game.actionTaken = true;
@@ -394,7 +405,25 @@ class GameManager {
 
     this.broadcastGameState(game);
 
-    return { result, gameOver: false };
+    return { result, gameOver: false, success: true };
+  }
+
+  private updateDefenderVisibility(defender: Player, attacker: Player, centerX: number, centerY: number): void {
+    for (let dy = -EXPLOSION_RADIUS; dy <= EXPLOSION_RADIUS; dy++) {
+      for (let dx = -EXPLOSION_RADIUS; dx <= EXPLOSION_RADIUS; dx++) {
+        const x = centerX + dx;
+        const y = centerY + dy;
+
+        if (Utils.isValidPosition(x, y)) {
+          const defenderCell = defender.board[y][x];
+
+          // If this cell is empty and the attacker can now see it, mark as REVEALED on defender's board
+          if (defenderCell === CellState.EMPTY && attacker.visibleEnemyBoard[y][x] !== CellState.EMPTY) {
+            defender.board[y][x] = CellState.REVEALED;
+          }
+        }
+      }
+    }
   }
 
   private revealArea(attacker: Player, defender: Player, centerX: number, centerY: number): void {
@@ -406,14 +435,17 @@ class GameManager {
         if (Utils.isValidPosition(x, y)) {
           const defenderCell = defender.board[y][x];
 
-          if (defenderCell === CellState.TANK) {
-            attacker.visibleEnemyBoard[y][x] = CellState.TANK;
-          } else if (defenderCell === CellState.HIT) {
-            attacker.visibleEnemyBoard[y][x] = CellState.HIT;
-          } else if (defenderCell === CellState.MISS) {
-            attacker.visibleEnemyBoard[y][x] = CellState.MISS;
-          } else {
-            attacker.visibleEnemyBoard[y][x] = CellState.REVEALED;
+          // Only update if not already revealed/visible
+          if (attacker.visibleEnemyBoard[y][x] === CellState.EMPTY) {
+            if (defenderCell === CellState.TANK) {
+              attacker.visibleEnemyBoard[y][x] = CellState.TANK;
+            } else if (defenderCell === CellState.HIT) {
+              attacker.visibleEnemyBoard[y][x] = CellState.HIT;
+            } else if (defenderCell === CellState.MISS) {
+              attacker.visibleEnemyBoard[y][x] = CellState.MISS;
+            } else {
+              attacker.visibleEnemyBoard[y][x] = CellState.REVEALED;
+            }
           }
         }
       }
@@ -627,7 +659,7 @@ class GameManager {
         case 'bomb':
           if (!connection) return;
           const bombResult = this.bomb(connection.gameId, connection.playerId, message.x, message.y);
-          ws.send(JSON.stringify({ type: 'bombResult', ...bombResult }));
+          ws.send(JSON.stringify({ type: 'bombResult', x: message.x, y: message.y, ...bombResult }));
           break;
 
         case 'getGameState':
