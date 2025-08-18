@@ -1,3 +1,5 @@
+import { Socket } from "dgram";
+
 // Types and interfaces
 interface GameState {
   myBoard: number[][];
@@ -108,7 +110,7 @@ class AssetsManager {
 
 
 class FogOfTankClient {
-  ws: WebSocket | null = null;
+  private ws: WebSocket | null = null;
   private gameState: GameState | null = null;
   private boardSize: number = 8;
   private cellSize: number = 50;
@@ -120,7 +122,7 @@ class FogOfTankClient {
   private playerId: string | null = null;
   private actionState: ActionState = 'attack';
   private assetManager: AssetsManager;
-  gameId: string | null = null;
+  private gameId: string | null = null;
 
   private gameCanvas!: HTMLCanvasElement;
   private enemyCanvas!: HTMLCanvasElement;
@@ -147,7 +149,6 @@ class FogOfTankClient {
   private initializeCanvases(): void {
     this.gameCanvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     this.enemyCanvas = document.getElementById('enemyCanvas') as HTMLCanvasElement;
-
     const gameCtx = this.gameCanvas.getContext('2d');
     const enemyCtx = this.enemyCanvas.getContext('2d');
 
@@ -307,6 +308,8 @@ class FogOfTankClient {
     this.showMessage(message.result);
     if (message.gameOver) {
       this.showMessage('🎉 Game Over! ' + message.result);
+      const turnIndicator = document.getElementById('turnIndicator') as HTMLElement;
+      turnIndicator.textContent = message.result;
     }
     // Reset selection after action
     this.resetSelection();
@@ -346,7 +349,7 @@ class FogOfTankClient {
   }
 
   // Canvas drawing methods
-  private drawBoards(): void {
+  drawBoards(): void {
     if (!this.gameState) return;
 
     this.drawBoard(this.gameCtx, this.gameState.myBoard, true);
@@ -467,18 +470,20 @@ class FogOfTankClient {
     const cellX = x * this.cellSize;
     const cellY = y * this.cellSize;
 
+    const ground = this.assetManager.getImage("non-damaged");
+    if (ground && isMyBoard && cellState !== CellState.HIT)
+      ctx.drawImage(ground, cellX + 1, cellY + 1, this.cellSize - 1, this.cellSize - 1);
+
     // Set the fill style for the cell background
-    const symbol = this.getCellImage(cellState, isMyBoard);
-    if (symbol) {
-      ctx.drawImage(symbol, cellX, cellY, this.cellSize, this.cellSize);
-    }
+    const cellImage = this.getCellImage(cellState, isMyBoard);
+    if (cellImage)
+      ctx.drawImage(cellImage, cellX + 1, cellY + 1, this.cellSize - 1, this.cellSize - 1);
 
     if (cellState === CellState.TANK) {
-      if (!isMyBoard) {
-        const ground = this.assetManager.getImage("non-damaged");
-        if (ground)
-          ctx.drawImage(ground, cellX, cellY, this.cellSize, this.cellSize);
-      }
+      const ground = this.assetManager.getImage("non-damaged");
+      if (ground && !isMyBoard)
+        ctx.drawImage(ground, cellX, cellY, this.cellSize, this.cellSize);
+
       // Check if the tank images are loaded before drawing
       const hullImage = isMyBoard ? this.assetManager.getImage('myHull') : this.assetManager.getImage('enemyHull');
       const weaponImage = isMyBoard ? this.assetManager.getImage('myWeapon') : this.assetManager.getImage('enemyWeapon');
@@ -514,21 +519,6 @@ class FogOfTankClient {
       }
     } else {
       // Draw other symbols as before
-    }
-  }
-
-  private getCellColor(cellState: number, isMyBoard: boolean): string {
-    switch (cellState) {
-      case CellState.TANK:
-        return isMyBoard ? '#666' : '#f44336';
-      case CellState.HIT:
-        return '#FF9800';
-      case CellState.MISS:
-        return '#2196F3';
-      case CellState.REVEALED:
-        return '#666';
-      default:
-        return '#2a2a2a';
     }
   }
 
@@ -698,7 +688,7 @@ class FogOfTankClient {
     this.drawBoards();
   }
 
-  private resetSelection(): void {
+  resetSelection(): void {
     this.selectedCell = null;
     this.selectedTankCell = null;
     this.actionState = 'attack';
@@ -756,7 +746,7 @@ class FogOfTankClient {
     const turnIndicator = document.getElementById('turnIndicator') as HTMLElement;
     if (this.gamePhase === 'battle') {
       if (this.isMyTurn) {
-        const actionText = this.actionState === 'attack' ? 'Attack Mode - Click enemy board to bomb!' : 'Move Mode - Select tank, then click adjacent cell!';
+        const actionText = this.actionState === 'attack' ? 'Attack Mode - Click enemy board to bomb!' : 'Move Mode - click highlighted cell to move or tank cell to disable';
         turnIndicator.textContent = `Your Turn - ${actionText}`;
         turnIndicator.className = 'turn-indicator your-turn';
       } else {
@@ -773,6 +763,7 @@ class FogOfTankClient {
       }
 
       turnIndicator.className = 'turn-indicator waiting-turn';
+    } else if (this.gamePhase === 'gameover') {
     } else {
       turnIndicator.textContent = 'Waiting...';
       turnIndicator.className = 'turn-indicator waiting-turn';
@@ -934,6 +925,10 @@ class FogOfTankClient {
       playerName: playerName
     });
   }
+
+  public getActionState(): ActionState { return this.actionState; }
+  public getGameID(): string | null { return this.gameId; }
+  public getWs(): WebSocket | null { return this.ws; }
 }
 
 // Global game instance
@@ -1033,31 +1028,35 @@ window.addEventListener('load', () => {
   (window as any).sendChat = () => {
     game.sendChat();
   };
+
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      if (game.getActionState() === 'move') {
+        game.resetSelection();
+        game.drawBoards();
+        return;
+      }
+      const gameArea = document.getElementById('gameArea') as HTMLElement;
+      if (gameArea.style.display !== 'none') {
+        if (confirm('Return to main menu?')) {
+          (window as any).leaveGame();
+        }
+      }
+    }
+  });
 });
 
 // Handle page visibility change
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && game && game.gameId) {
+  if (!document.hidden && game && game.getGameID()) {
     game.sendMessage({ type: 'getGameState' });
   }
 });
 
 // Handle window beforeunload
 window.addEventListener('beforeunload', () => {
-  if (game && game.ws && game.gameId) {
+  if (game && game.getWs() && game.getGameID()) {
     game.sendMessage({ type: 'leaveGame' });
-  }
-});
-
-// Keyboard shortcuts
-document.addEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
-    const gameArea = document.getElementById('gameArea') as HTMLElement;
-    if (gameArea.style.display !== 'none') {
-      if (confirm('Return to main menu?')) {
-        (window as any).leaveGame();
-      }
-    }
   }
 });
 

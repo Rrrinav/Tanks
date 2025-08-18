@@ -373,6 +373,9 @@ class GameManager {
       // Remove tank from defender's tanks array
       defender.tanks = defender.tanks.filter(t => !(t.x === x && t.y === y));
 
+      // IMPORTANT: Update attacker's visible board to show HIT instead of TANK
+      attacker.visibleEnemyBoard[y][x] = CellState.HIT;
+
       console.log(`${attacker.name} hit ${defender.name}'s tank at (${x}, ${y})`);
 
       // Check win condition
@@ -389,6 +392,8 @@ class GameManager {
       if (targetCell === CellState.EMPTY) {
         defender.board[y][x] = CellState.MISS;
       }
+      // Update attacker's visible board to show MISS
+      attacker.visibleEnemyBoard[y][x] = CellState.MISS;
       result = `Miss at (${String.fromCharCode(65 + x)}${y + 1})`;
       console.log(`${attacker.name} missed at (${x}, ${y})`);
     }
@@ -398,6 +403,13 @@ class GameManager {
 
     // NEW: Update defender's board to show revealed areas
     this.updateDefenderVisibility(defender, attacker, x, y);
+
+    // IMPORTANT: Ensure the bombed position shows correct state (this must be AFTER revealArea)
+    if (targetCell === CellState.TANK) {
+      attacker.visibleEnemyBoard[y][x] = CellState.HIT;
+    } else {
+      attacker.visibleEnemyBoard[y][x] = CellState.MISS;
+    }
 
     // Switch turns and increment move count
     game.actionTaken = true;
@@ -434,15 +446,23 @@ class GameManager {
 
         if (Utils.isValidPosition(x, y)) {
           const defenderCell = defender.board[y][x];
+          const currentVisibleState = attacker.visibleEnemyBoard[y][x];
+
+          // Don't overwrite already known HIT/MISS states
+          if (currentVisibleState === CellState.HIT || currentVisibleState === CellState.MISS) {
+            continue;
+          }
 
           // Only update if not already revealed/visible
-          if (attacker.visibleEnemyBoard[y][x] === CellState.EMPTY) {
+          if (currentVisibleState === CellState.EMPTY) {
             if (defenderCell === CellState.TANK) {
               attacker.visibleEnemyBoard[y][x] = CellState.TANK;
             } else if (defenderCell === CellState.HIT) {
               attacker.visibleEnemyBoard[y][x] = CellState.HIT;
             } else if (defenderCell === CellState.MISS) {
               attacker.visibleEnemyBoard[y][x] = CellState.MISS;
+            } else if (defenderCell === CellState.REVEALED) {
+              attacker.visibleEnemyBoard[y][x] = CellState.REVEALED;
             } else {
               attacker.visibleEnemyBoard[y][x] = CellState.REVEALED;
             }
